@@ -162,6 +162,8 @@ public:
 
 	/**
 	 * Adds a new job to this ThreadPool's job queue.
+	 * 
+	 * This may block when the job queue reached its maxmimum length.
 	 */
 	void addjob(Args... arguments){
 		std::unique_lock<std::mutex> lck(jobs_mutex);
