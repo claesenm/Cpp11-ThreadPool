@@ -75,6 +75,9 @@ private:
 	std::condition_variable maxjobs_cv;
 
 public:
+	/**
+	 * The actual execution of jobs is done by workers.
+	 */
 	class Worker{
 	private:
 		typedef ThreadPool<Ret(Args...)>::job job;
@@ -123,13 +126,27 @@ private:
 	std::vector<Worker> threads;
 
 public:
+	/**
+	 * Creates a ThreadPool to execute fun.
+	 * 
+	 * The default number of threads is std::thread::hardware_concurrency().
+	 * Using this constructor allows an infinite job queue.
+	 */
 	ThreadPool(Fun&& fun):ThreadPool{std::move(fun),std::thread::hardware_concurrency(),0}{};
+	/**
+	 * Creates a ThreadPool to execute fun with specified number of threads.
+	 * 
+	 * When maxjobs=0 (default), an infinite job queue is permitted.
+	 * When maxjobs>0, ThreadPool::addjob() will block until the queue
+	 * is small enough.
+	 */
 	ThreadPool(Fun&& fun, unsigned numthreads, unsigned maxjobs=0)
 	:fun{std::move(fun)},
 	 stop_{false},
 	 maxjobs{maxjobs}
 	{
 		// create worker threads
+		if(!numthreads) numthreads=1;
 		threads.reserve(numthreads);
 		for(unsigned i=0; i<numthreads; ++i){
 			threads.emplace_back(*this);
@@ -143,6 +160,9 @@ public:
 		join();
 	}
 
+	/**
+	 * Adds a new job to this ThreadPool's job queue.
+	 */
 	void addjob(Args... arguments){
 		std::unique_lock<std::mutex> lck(jobs_mutex);
 
@@ -158,12 +178,17 @@ public:
 		jobs_cv.notify_one();
 	}
 
-
+	/**
+	 * Joins the threads managed by this ThreadPool.
+	 */ 
 	void join(){
 		stop();
 		for (auto &td: threads){ td.t.join(); }
 	}
 
+	/**
+	 * Notifies all worker threads to stop.
+	 */ 
 	void stop(){
 		stop_=true;
 		jobs_cv.notify_all();
@@ -176,12 +201,26 @@ public:
 	    for (auto& f : futures) { f.wait(); }
 	}
 
+	/**
+	 * Erases the list of futures maintained by this ThreadPool.
+	 */
 	void clear_futures(){ futures.clear(); }
 
+	/**
+	 * Returns the number of threads managed by this ThreadPool.
+	 */
 	unsigned num_threads() const{ return threads.size(); }
 
+	/**
+	 * Iterate over the futures of all posted jobs.
+	 * Iteration occurs in the order the jobs were added.
+	 */
 	iterator begin(){ return futures.begin(); }
 	iterator end(){ return futures.end(); }
+	/**
+	 * Iterate over the futures of all posted jobs.
+	 * Iteration occurs in the order the jobs were added.
+	 */
 	const_iterator cbegin() const{ return futures.cbegin(); }
 	const_iterator cend() const{ return futures.cend(); }
 };
